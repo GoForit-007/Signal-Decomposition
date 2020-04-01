@@ -1,0 +1,153 @@
+clc
+clear all
+close all
+% 产生用于谐波合成的方波信号
+L=1000; % 数据点数
+fs=1000; % 采样频率
+Ts=1/fs;
+t=(0:L-1)*Ts;
+freqs=1/(L*Ts)*(0:L/2-1)/fs;
+w0=2*pi*10; % 基波频
+v_1=sin(w0*t);
+v_2=1/3*sin(3*w0*t);
+v_3=1/5*sin(5*w0*t);
+v_4=1/7*sin(7*w0*t);
+v_5=1/9*sin(9*w0*t);
+v_6=1/11*sin(11*w0*t);
+v_7=1/13*sin(13*w0*t);
+rng(1,'twister'); % 保证每次生成的随机数一样
+% noise=0.1*randn(1,L); % 噪声强度
+STD = 0.5;
+noise = addnoise(length(t),0,STD);
+signal=4/pi*(v_1+v_2+v_3+0*v_4+0*v_5+0*v_6+0*v_7)+noise;
+x=4/pi*[v_1;v_2;v_3;noise;zeros(1,length(t));zeros(1,length(t));zeros(1,length(t))];
+figure(1)
+plot(t,signal)
+title('方波信号')
+
+figure(2)
+plot(linspace(-fs/2,fs/2,length(signal)),2*abs(fftshift(fft(signal))),'r')
+grid on
+title('方波频谱图')
+
+% EMD
+Sig=signal;
+SampFreq=fs;
+tic
+imf=emd(Sig);
+toc
+[corr,corr_norm]=CorrOfImf(Sig,imf);
+SelImf=find(corr_norm>0.2);
+EK=length(SelImf);
+figure
+for i=1:EK
+    subplot(EK,1,i)
+    plot(t,imf(SelImf(i),:))
+    if i==1
+        title('EMD')
+    end
+end
+[A_hilbert,f_hilbert,t_hilbert]=hhspectrum(imf(SelImf,:)); % 对IMF分量求取瞬时频率和振幅；A是每个IMF的振幅向量；f是每个IMF对应的瞬时频率；t时间序列
+figure
+plot(t_hilbert/SampFreq, f_hilbert*SampFreq)
+title('EMD-time frequency')
+xlabel('time')
+ylabel('frequency')
+f_hilbert=f_hilbert*SampFreq;
+% 计算瞬时频率的均值,标准差,置信区间
+IFEMDmean=mean(f_hilbert,2);
+IFEMDstd=std(f_hilbert,0,2);
+IFEMDinterval=[IFEMDmean-IFEMDstd IFEMDmean+IFEMDstd];
+
+% 周期一致性指标
+cuEMD=zeros(EK,1);
+for i=1:EK
+    cuEMD(i)=ConsistOfPeriodFun(imf(SelImf(i),:),Ts);
+end
+% 稀疏指数
+SIEMD=zeros(EK,1);
+for i=1:EK
+    SIEMD(i)=SparsenessFreqsFunction(imf(SelImf(i),:));
+end
+sest=flipud(imf(SelImf,:));
+figure
+LineSize=1;
+subplot(711)
+plot(Sig,'k','linewidth',LineSize)
+% hold on
+% plot(sest(1,:),'r--','linewidth',LineSize)
+set(gca,'xtick',[0:200:1000])
+ylabel('x')
+title('EMD')
+subplot(712)
+plot(sest(1,:),'b','linewidth',LineSize)
+% hold on
+% plot(x(1,:),'r--','linewidth',LineSize)
+set(gca,'xtick',[0:200:1000])
+ylabel('IMF_6')
+subplot(713)
+plot(sest(2,:),'b','linewidth',LineSize)
+% hold on
+% plot(x(2,:),'r--','linewidth',LineSize)
+set(gca,'xtick',[0:200:1000])
+ylabel('IMF_5')
+subplot(714)
+plot(sest(3,:),'b','linewidth',LineSize)
+% hold on
+% plot(x(3,:),'r--','linewidth',LineSize)
+set(gca,'xtick',[0:200:1000])
+ylabel('IMF_4')
+subplot(715)
+plot(sest(4,:),'b','linewidth',LineSize)
+% hold on
+% plot(x(4,:),'r--','linewidth',LineSize)
+set(gca,'xtick',[0:200:1000])
+ylabel('IMF_3')
+subplot(716)
+plot(sest(5,:),'b','linewidth',LineSize)
+% hold on
+% plot(x(5,:),'r--','linewidth',LineSize)
+set(gca,'xtick',[0:200:1000])
+ylabel('IMF_2')
+subplot(717)
+plot(sest(5,:),'b','linewidth',LineSize)
+% hold on
+% plot(x(6,:),'r--','linewidth',LineSize)
+set(gca,'xtick',[0:200:1000])
+ylabel('IMF_1')
+xlabel('Samples')
+
+figure
+LineSize=1;
+subplot(411)
+plot(Sig,'k','linewidth',LineSize)
+% hold on
+% plot(sest(1,:),'r--','linewidth',LineSize)
+set(gca,'xtick',[0:200:1000])
+ylabel('x')
+title('EMD')
+subplot(412)
+plot(imf(6,:)+imf(5,:),'b','linewidth',LineSize)
+hold on
+plot(x(1,:),'r--','linewidth',LineSize)
+set(gca,'xtick',[0:200:1000])
+ylabel('IMF_{5+6}')
+subplot(413)
+plot(imf(4,:),'b','linewidth',LineSize)
+hold on
+plot(x(2,:),'r--','linewidth',LineSize)
+set(gca,'xtick',[0:200:1000])
+ylabel('IMF_4')
+subplot(414)
+plot(imf(3,:),'b','linewidth',LineSize)
+hold on
+plot(x(3,:),'r--','linewidth',LineSize)
+set(gca,'xtick',[0:200:1000])
+ylabel('IMF_3')
+xlabel('Samples')
+
+% 计算误差
+sest(1,:)=imf(6,:)+imf(5,:);
+sest(2,:)=imf(2,:);
+sest(3,:)=imf(3,:);
+ErrorValue=sum(sum(abs(sest(1:3,:)-x(1:3,:))))
